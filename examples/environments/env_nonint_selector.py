@@ -51,4 +51,4 @@ def get_first_options():
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    main(selection=63)
+    main(headless=True)

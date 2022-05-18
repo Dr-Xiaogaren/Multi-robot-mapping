@@ -1,17 +1,12 @@
 import numpy as np
 import pybullet as p
 
-from igibson.objects.visual_marker import VisualMarker
 from igibson.reward_functions.collision_reward import CollisionReward
-from igibson.reward_functions.point_goal_reward import PointGoalReward
-from igibson.reward_functions.potential_reward import PotentialReward
 from igibson.scenes.gibson_indoor_scene import StaticIndoorScene
 from igibson.scenes.igibson_indoor_scene import InteractiveIndoorScene
 from igibson.tasks.task_base import BaseTask
-from igibson.termination_conditions.max_collision import MaxCollision
-from igibson.termination_conditions.out_of_bound import OutOfBound
-from igibson.termination_conditions.point_goal import PointGoal
-from igibson.termination_conditions.timeout import Timeout
+from envs.termination_conditions.max_collision import MaxCollision
+from envs.termination_conditions.timeout import Timeout
 from igibson.utils.utils import cartesian_to_polar, l2_distance, rotate_vector_3d
 
 
@@ -32,45 +27,9 @@ class MappingTask(BaseTask):
             CollisionReward(self.config),
         ]
 
-        self.initial_pos = np.array(self.config.get("initial_pos", [0, 0, 0]))
-        self.initial_orn = np.array(self.config.get("initial_orn", [0, 0, 0]))
-        self.target_pos = np.array(self.config.get("target_pos", [5, 5, 0]))
-        self.goal_format = self.config.get("goal_format", "polar")
-
-        self.visible_target = self.config.get("visible_target", False)
-        self.visible_path = self.config.get("visible_path", False)
+        self.initial_pos = np.array(self.config.get("initial_pos"))
+        self.initial_orn = np.array(self.config.get("initial_orn"))
         self.floor_num = 0
-
-    def get_geodesic_potential(self, env):
-        """
-        Get potential based on geodesic distance
-
-        :param env: environment instance
-        :return: geodesic distance to the target position
-        """
-        _, geodesic_dist = self.get_shortest_path(env)
-        return geodesic_dist
-
-    def get_l2_potential(self, env):
-        """
-        Get potential based on L2 distance
-
-        :param env: environment instance
-        :return: L2 distance to the target position
-        """
-        return l2_distance(env.robots[0].get_position()[:2], self.target_pos[:2])
-
-    def get_potential(self, env):
-        """
-        Compute task-specific potential: distance to the goal
-
-        :param env: environment instance
-        :return: task potential
-        """
-        if self.reward_type == "l2":
-            return self.get_l2_potential(env)
-        elif self.reward_type == "geodesic":
-            return self.get_geodesic_potential(env)
 
     def reset_scene(self, env):
         """
@@ -93,23 +52,54 @@ class MappingTask(BaseTask):
             env.land(robot, self.initial_pos[i], self.initial_orn[i])
 
     def reset_variables(self, env):
-        self.path_length = 0.0
         self.robot_pos = [self.initial_pos[i, 0:2] for i in range(env.n_robots)]
-        self.geodesic_dist = self.get_geodesic_potential(env)
 
     def get_termination(self, env, collision_links=[], action=None, info={}):
         """
-        Aggreate termination conditions and fill info
+        Aggreate termination conditions
+
+        :param env: environment instance
+        :param collision_links: collision links after executing action
+        :param action: the executed action
+        :param info: additional info
+        :return done: whether the episode has terminated
+        :return info: additional info
         """
-        done, info = super(MappingTask, self).get_termination(env, collision_links, action, info)
-
-        info["path_length"] = self.path_length
-        if done:
-            info["spl"] = float(info["success"]) * min(1.0, self.geodesic_dist / self.path_length)
-        else:
-            info["spl"] = 0.0
-
+        done = [False for i in range(env.n_robots)]
+        success = [False for i in range(env.n_robots)]
+        for condition in self.termination_conditions:
+            # assert the condition is a list with length of n_robots
+            d, s = condition.get_termination(self, env)
+            for i in range(env.n_robots):
+                done[i] = done[i] or d[i]
+                success[i] = success[i] or s[i]
+        info["done"] = done
+        info["success"] = success
         return done, info
+
+    def get_reward(self, env, collision_links=[], action=None, info={}):
+        """
+        Aggreate reward functions
+
+        :param env: environment instance
+        :param collision_links: collision links after executing action
+        :param action: the executed action
+        :param info: additional info
+        :return reward: total reward of the current timestep
+        :return info: additional info
+        """
+
+        reward = [0.0 for i in range(env.n_robots)]
+        for reward_function in self.reward_functions:
+            # assert reward is a list with length of robot or just a float
+            single_reward = reward_function.get_reward(self, env)
+            if isinstance(single_reward, list):
+                for i in range(env.n_robots):
+                    reward[i] += single_reward[i]
+            else:
+                for i in range(env.n_robots):
+                    reward[i] += single_reward
+        return reward, info
 
     def get_task_obs(self, env):
         """
@@ -127,28 +117,11 @@ class MappingTask(BaseTask):
 
         return task_obs
 
-    def get_shortest_path(self, env, from_initial_pos=False, entire_path=False):
-        """
-        Get the shortest path and geodesic distance from the robot or the initial position to the target position
-
-        :param env: environment instance
-        :param from_initial_pos: whether source is initial position rather than current position
-        :param entire_path: whether to return the entire shortest path
-        :return: shortest path and geodesic distance to the target position
-        """
-        if from_initial_pos:
-            source = self.initial_pos[:2]
-        else:
-            source = env.robots[0].get_position()[:2]
-        target = self.target_pos[:2]
-        return env.scene.get_shortest_path(self.floor_num, source, target, entire_path=entire_path)
-
     def step(self, env):
         """
-        Perform task-specific step: step visualization and aggregate path length
+        Perform task-specific step: step visualization
 
         :param env: environment instance
         """
         new_robot_pos = [robot.get_position()[:2] for robot in env.robots]
-        # self.path_length += l2_distance(self.robot_pos, new_robot_pos)
         self.robot_pos = new_robot_pos

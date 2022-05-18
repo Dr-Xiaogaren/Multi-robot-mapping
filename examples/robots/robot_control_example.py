@@ -26,6 +26,8 @@ CONTROL_MODES = OrderedDict(
 
 SCENES = OrderedDict(
     Rs_int="Realistic interactive home environment (default)",
+    Rs="Realistic interactive home environment",
+    aayBHfsNo7d="custom interactive home environment",
     gates_kitchenette="Gates kitchenette",
     empty="Empty environment with no objects",
 )
@@ -356,7 +358,13 @@ def main(selection="user", headless=False, short_exec=False):
     # Get robot to create
     robot_name = choose_from_options(options=get_first_options(), name="robot", selection=selection)
     robot = REGISTERED_ROBOTS[robot_name](action_type="continuous")
+
+    robot_name_2 = choose_from_options(options=get_first_options(), name="robot", selection=selection)
+    robot_2 = REGISTERED_ROBOTS[robot_name_2](action_type="continuous")
+
     s.import_object(robot)
+
+    s.import_object(robot_2)
 
     # For the second and further selections, we either as the user or randomize
     # If the we are exhaustively testing the first selection, we randomize the rest
@@ -422,12 +430,25 @@ def main(selection="user", headless=False, short_exec=False):
             component: {"name": controller_name} for component, controller_name in controller_choices.items()
         },
     )
-    s.import_object(robot)
 
+    robot_2 = REGISTERED_ROBOTS[robot_name](
+        action_type="continuous",
+        action_normalize=True,
+        controller_config={
+            component: {"name": controller_name} for component, controller_name in controller_choices.items()
+        },
+    )
+    s.import_object(robot)
+    s.import_object(robot_2)
     # Reset the robot
     robot.set_position([-0.75, 1.0, 0])
     robot.reset()
     robot.keep_still()
+
+    scene.robots[1].set_position([-0.75, 0.0, 0])
+    robot_2.reset()
+    robot_2.keep_still()
+
 
     # Set initial viewer if using IG GUI
     if gui != "pb" and not headless:

@@ -551,7 +551,8 @@ if __name__ == "__main__":
             location = [robot.get_position() for robot in env.robots]
             # print("robot_location", location)
             print("reward", reward)
-            if done:
+            print('done', done)
+            if sum(done) == env.n_robots:
                 break
         print("Episode finished after {} timesteps, took {} seconds.".format(env.current_step, time.time() - start))
     env.close()
