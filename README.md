@@ -48,4 +48,10 @@ iGibson 2.2.0
  `reset_agent`, `reset_variables`, `get_termination`, `get_reward`, `get_task_obs`, `step`需要根据任务的不同进行相应修改。
  留意get_task_obs取出的是task-specific的观测，一些通用的观测（比如RGBD,Scan,Seg）在config文件中可以指定，不用在这单独取。
 
+#### 运行实例
+库根目录下：
+```bash
+python -m envs.igibson_env --config /home/vsis/Documents/Multi-robot-mapping/config/multi_robot_mapping.yaml --mode gui_interactive
+```
+成功后可以看到两个界面，一个旁观者界面，一个机器人视角,机器人随机移动。
 
