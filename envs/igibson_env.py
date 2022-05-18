@@ -14,7 +14,7 @@ from envs.env_base import BaseEnv
 from igibson.robots.robot_base import BaseRobot
 from igibson.sensors.bump_sensor import BumpSensor
 from igibson.sensors.scan_sensor import ScanSensor
-from igibson.sensors.vision_sensor import VisionSensor
+from utils.vision_sensor import VisionSensor
 from igibson.tasks.behavior_task import BehaviorTask
 from igibson.tasks.dummy_task import DummyTask
 from igibson.tasks.dynamic_nav_random_task import DynamicNavRandomTask
