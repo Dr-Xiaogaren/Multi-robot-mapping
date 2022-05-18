@@ -13,10 +13,6 @@ iGibson 2.2.0
 安装指引见 https://stanfordvl.github.io/iGibson/installation.html
 安装完成后记得下载Rs场景（demo场景）以及相应数据集。
 
-### 目前留存的bug
-1. 离散动作空间存在bug。
-2. 无法保证RGBD之外的状态信息获取不出问题。
-
 ### 核心API
 #### 场景部分
 ##### 1. iGibsonEnv
@@ -54,4 +50,5 @@ iGibson 2.2.0
 python -m envs.igibson_env --config /home/vsis/Documents/Multi-robot-mapping/config/multi_robot_mapping.yaml --mode gui_interactive
 ```
 成功后可以看到两个界面，一个旁观者界面，一个机器人视角,机器人随机移动。
+
 
