@@ -538,7 +538,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    env = iGibsonEnv(config_file=args.config, mode=args.mode, use_pb_gui=False, action_timestep=1.0 / 5.0, physics_timestep=1.0 / 40.0)
+    env = iGibsonEnv(config_file=args.config, mode=args.mode, use_pb_gui=False, action_timestep=1.0 / 10.0, physics_timestep=1.0 / 40.0)
 
     step_time_list = []
     for episode in range(100):
@@ -548,10 +548,12 @@ if __name__ == "__main__":
         for _ in range(100):  # 10 seconds
             action = env.action_space.sample()
             state, reward, done, _ = env.step(action)
+            coollision_info = env.collision_links
             location = [robot.get_position() for robot in env.robots]
             # print("robot_location", location)
             print("reward", reward)
             print('done', done)
+            # print("collision info", coollision_info)
             if sum(done) == env.n_robots:
                 break
         print("Episode finished after {} timesteps, took {} seconds.".format(env.current_step, time.time() - start))

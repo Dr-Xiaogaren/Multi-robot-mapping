@@ -1,7 +1,7 @@
 import numpy as np
 import pybullet as p
 
-from igibson.reward_functions.collision_reward import CollisionReward
+from envs.reward_functions.collision_reward import CollisionReward
 from igibson.scenes.gibson_indoor_scene import StaticIndoorScene
 from igibson.scenes.igibson_indoor_scene import InteractiveIndoorScene
 from igibson.tasks.task_base import BaseTask
