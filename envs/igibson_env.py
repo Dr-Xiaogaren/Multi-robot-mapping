@@ -10,7 +10,7 @@ import pybullet as p
 from transforms3d.euler import euler2quat
 
 from igibson import object_states
-from env.env_base import BaseEnv
+from envs.env_base import BaseEnv
 from igibson.robots.robot_base import BaseRobot
 from igibson.sensors.bump_sensor import BumpSensor
 from igibson.sensors.scan_sensor import ScanSensor
@@ -23,6 +23,7 @@ from igibson.tasks.point_nav_fixed_task import PointNavFixedTask
 from igibson.tasks.point_nav_random_task import PointNavRandomTask
 from igibson.tasks.reaching_random_task import ReachingRandomTask
 from igibson.tasks.room_rearrangement_task import RoomRearrangementTask
+from envs.tasks.mapping_task import MappingTask
 from igibson.utils.constants import MAX_CLASS_COUNT, MAX_INSTANCE_COUNT
 from igibson.utils.utils import quatToXYZW
 
@@ -108,6 +109,8 @@ class iGibsonEnv(BaseEnv):
             self.task = ReachingRandomTask(self)
         elif self.config["task"] == "room_rearrangement":
             self.task = RoomRearrangementTask(self)
+        elif self.config["task"] == "multi_robot_mapping":
+            self.task = MappingTask(self)
         else:
             try:
                 import bddl
@@ -130,8 +133,9 @@ class iGibsonEnv(BaseEnv):
         :param low: lower bounds of the space
         :param high: higher bounds of the space
         """
-
-        return gym.spaces.Box(low=low, high=high, shape=shape, dtype=np.float32)
+        dim_of_robots = (self.n_robots,)
+        multi_robot_shape = dim_of_robots+shape
+        return gym.spaces.Box(low=low, high=high, shape=multi_robot_shape, dtype=np.float32)
 
     def load_observation_space(self):
         """
@@ -246,7 +250,14 @@ class iGibsonEnv(BaseEnv):
         """
         Load action space.
         """
-        self.action_space = self.robots[0].action_space
+        multi_action_list = list()
+        for robot in self.robots:
+            multi_action_list.append(robot.action_space)
+        multi_action_tuple = tuple(multi_action_list)
+
+        multi_robot_action_space = gym.spaces.Tuple(multi_action_tuple)  # use Tuple space
+
+        self.action_space = multi_robot_action_space
 
     def load_miscellaneous_variables(self):
         """
@@ -302,34 +313,40 @@ class iGibsonEnv(BaseEnv):
         :return: a list of collisions from the last physics timestep
         """
         self.simulator_step()
-        collision_links = [
-            collision for bid in self.robots[0].get_body_ids() for collision in p.getContactPoints(bodyA=bid)
-        ]
-        return self.filter_collision_links(collision_links)
+        multi_collision_links = list()
+        for robot in self.robots:
+            collision_links = [
+                collision for bid in robot.get_body_ids() for collision in p.getContactPoints(bodyA=bid)
+            ]
+            multi_collision_links.append(collision_links)
+        return self.filter_collision_links(multi_collision_links)
 
-    def filter_collision_links(self, collision_links):
+    def filter_collision_links(self, multi_collision_links):
         """
         Filter out collisions that should be ignored.
 
-        :param collision_links: original collisions, a list of collisions
+        :param multi_collision_links: original collisions, a list of list of collisions for each robots
         :return: filtered collisions
         """
         # TODO: Improve this to accept multi-body robots.
-        new_collision_links = []
-        for item in collision_links:
-            # ignore collision with body b
-            if item[2] in self.collision_ignore_body_b_ids:
-                continue
+        multi_new_collision_links = []
+        for robot, collision_links in zip(self.robots, multi_collision_links):
+            new_collision_links = []
+            for item in collision_links:
+                # ignore collision with body b
+                if item[2] in self.collision_ignore_body_b_ids:
+                    continue
 
-            # ignore collision with robot link a
-            if item[3] in self.collision_ignore_link_a_ids:
-                continue
+                # ignore collision with robot link a
+                if item[3] in self.collision_ignore_link_a_ids:
+                    continue
 
-            # ignore self collision with robot link a (body b is also robot itself)
-            if item[2] == self.robots[0].base_link.body_id and item[4] in self.collision_ignore_link_a_ids:
-                continue
-            new_collision_links.append(item)
-        return new_collision_links
+                # ignore self collision with robot link a (body b is also robot itself)
+                if item[2] == robot.base_link.body_id and item[4] in self.collision_ignore_link_a_ids:
+                    continue
+                new_collision_links.append(item)
+            multi_new_collision_links.append(new_collision_links)
+        return multi_new_collision_links
 
     def populate_info(self, info):
         """
@@ -353,11 +370,14 @@ class iGibsonEnv(BaseEnv):
         """
         self.current_step += 1
         if action is not None:
-            self.robots[0].apply_action(action)
+            for single_action, robot in zip(action, self.robots):
+                robot.apply_action(single_action)
         collision_links = self.run_simulation()
         self.collision_links = collision_links
-        self.collision_step += int(len(collision_links) > 0)
-
+        for collision_link in collision_links:
+            if len(collision_link) > 0:
+                self.collision_step += 1
+                break
         state = self.get_state()
         info = {}
         reward, info = self.task.get_reward(self, collision_links, action, info)
@@ -495,7 +515,8 @@ class iGibsonEnv(BaseEnv):
         """
         self.randomize_domain()
         # Move robot away from the scene.
-        self.robots[0].set_position([100.0, 100.0, 100.0])
+        for robot in self.robots:
+            robot.set_position([100.0, 100.0, 100.0])
         self.task.reset(self)
         self.simulator.sync(force_sync=True)
         state = self.get_state()
@@ -517,7 +538,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    env = iGibsonEnv(config_file=args.config, mode=args.mode, action_timestep=1.0 / 10.0, physics_timestep=1.0 / 40.0)
+    env = iGibsonEnv(config_file=args.config, mode=args.mode, use_pb_gui=False, action_timestep=1.0 / 5.0, physics_timestep=1.0 / 40.0)
 
     step_time_list = []
     for episode in range(100):
@@ -527,6 +548,8 @@ if __name__ == "__main__":
         for _ in range(100):  # 10 seconds
             action = env.action_space.sample()
             state, reward, done, _ = env.step(action)
+            location = [robot.get_position() for robot in env.robots]
+            # print("robot_location", location)
             print("reward", reward)
             if done:
                 break

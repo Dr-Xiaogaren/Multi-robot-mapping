@@ -29,7 +29,7 @@ def main(selection="user", headless=False, short_exec=False):
     view_direction = np.array([1, 0, 0])
     renderer.set_camera(camera_pose, camera_pose + view_direction, [0, 0, 1])
     renderer.set_fov(90)
-    frames = renderer.render(modes=("rgb", "normal", "3d"))
+    frames = renderer.render(modes=("rgb", "seg", "3d"))
 
     # Render 3d points as depth map
     depth = np.linalg.norm(frames[2][:, :, :3], axis=2)
